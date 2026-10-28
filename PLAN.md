@@ -1,199 +1,243 @@
-# K-Pharm Talk — Next.js 이식 구현 계획
+# K-Pharm Talk — reactjs → Next.js 이식 구현 계획
 
-`vanilla/`의 강의 홈페이지(HTML/CSS/JS)를 `nextjs/` 폴더에 Next.js로 옮기기 위한 계획입니다.
-**목표는 내용·화면·동작이 vanilla와 똑같은 Next.js 버전**을 만드는 것입니다. 문구, 데이터, 클래스명, 동작 순서를 바꾸지 않습니다.
+`reactjs/`(Vite + React)의 강의 홈페이지를 `nextjs/`에 **Next.js App Router**로 옮기는 계획입니다.
 
-> `reactjs/`는 이후 캐러셀(embla), 아이콘(lucide), 라우팅(useRoute), Portrait/Team 컴포넌트 등이 추가되어
-> vanilla와 달라졌습니다. **기준은 항상 `vanilla/`** 이고, `reactjs/`의 컴포넌트는 구조를 참고하는 용도로만 씁니다.
+- **기준 버전:** `reactjs` 저장소의 커밋 `5cd6c7a`입니다. 강사진 무한 슬라이드와 일러스트까지 들어간 상태입니다.
+- **목표:** 문구, 데이터, 디자인(클래스명·CSS), 동작을 reactjs와 **똑같이** 만드는 것입니다.
+- **예외:** 주소 체계만 Next.js에 맞게 바꿉니다. `#/curriculum` 같은 해시 주소를 `/curriculum` 같은 실제 주소로 옮깁니다. 그 밖의 차이는 아래 "핵심 결정"에 적은 것만 허용합니다.
 
 ---
-
-## 현재 상태
-
-```
-바탕 화면/react/
-├─ vanilla/   ← .git (origin = github.com/jhss9001-glitch/react.git)
-├─ reactjs/   ← .git (origin = github.com/jhss9001-glitch/reactjs.git)
-└─ nextjs/    ← 이 계획 문서만 있음
-```
-
-- vanilla 구성: `index.html`(240줄) · `style.css`(430줄) · `data.js`(237줄) · `app.js`(419줄)
-- 개발 환경: Node v24, npm 11, Next.js 16.4.3, React 19.3
 
 ## 진행 상황 (2026-10-28)
 
-- ✅ 0~4단계 구현 완료 · `npm run lint` / `npm run build` 통과, `/`가 정적(○)으로 생성됨
-- ✅ 서버 HTML 확인: 문구, 커리큘럼 합계(5개 챕터 · 20강 · 약 5시간 10분), 할인율, 신청서 기본 플랜(올인원)이 vanilla와 같음
-- ⬜ 5단계 브라우저 체크리스트 (직접 클릭해서 확인 필요)
-- ⬜ 7단계 Vercel 배포
+- ✅ 1~4단계 구현 완료. `npm run lint`와 `npm run build`가 통과했고, 모든 경로가 정적(○)으로 생성됩니다.
+- ✅ 5단계 자동 확인을 마쳤습니다. 브라우저 DevTools 프로토콜로 다음을 확인했습니다.
+  - 모든 페이지에 콘솔 오류와 hydration 경고가 없습니다.
+  - 페이지별 탭 제목이 맞습니다.
+  - `/apply?plan=basic`에서 플랜이 미리 선택되고, 수강료 페이지 버튼을 누르면 `/apply?plan=pro`로 이동해 올인원이 선택됩니다.
+  - 다크 모드가 새로고침 후에도 유지됩니다.
+  - "무료 표현 들어보기"를 누르면 `#preview`로 스크롤됩니다.
+  - 강사 슬라이드가 자동으로 넘어갑니다.
+- ⬜ 5단계 나머지(모바일 폭, 퀴즈·신청서 입력 등 직접 클릭 확인)와 6단계 커밋·배포가 남았습니다.
 
----
+### 계획과 달라진 점
 
-## 0단계: 저장소
+- **`Providers.jsx`를 만들지 않음:** `ToastProvider` 자체가 클라이언트 컴포넌트라 layout에서 바로 감쌌습니다.
+- **`useLocalStorage`를 없앰:** Next 린트 규칙(`react-hooks/set-state-in-effect`)에 걸려서 지웠습니다. `useTheme`는 상태 없이 `<html data-theme>`와 localStorage를 직접 바꿉니다. 저장된 값은 layout의 인라인 스크립트가 읽습니다.
+- **`useInView`의 대체 처리를 뺌:** IntersectionObserver를 지원하지 않을 때 바로 보여주던 처리입니다. 지금 쓰이는 브라우저는 모두 지원합니다.
+- **`Team`의 동작 줄이기 처리 방식을 바꿈:** `stop()`을 호출하는 대신 새 훅 `useReducedMotion`(`useSyncExternalStore`)으로 설정을 읽고, 그 값에 따라 Autoplay 플러그인 목록을 정합니다. Embla의 Autoplay는 `stop()` 뒤에도 마우스를 떼면 다시 재생되기 때문입니다.
 
-reactjs와 같은 방식으로 **별도 GitHub 저장소**로 관리합니다.
-
-1. GitHub에서 빈 저장소 `nextjs`를 만듭니다. README·.gitignore·라이선스는 추가하지 않습니다.
-2. `nextjs/`에서 `git init` 후 `origin`을 `nextjs.git`으로 지정합니다. (6단계)
-
----
-
-## 1단계: 프로젝트 생성
-
-- **Next.js (App Router) + JavaScript**로 만듭니다. TypeScript·Tailwind는 쓰지 않습니다.
-- `react/` 폴더에서 실행합니다.
-  ```powershell
-  npx create-next-app@latest nextjs --js --app --src-dir --eslint --no-tailwind --import-alias "@/*"
-  cd nextjs
-  ```
-  - `nextjs/` 폴더에 이 문서가 있어서 생성이 막히면, 문서를 잠시 다른 곳에 옮겼다가 다시 넣습니다.
-  - 그 밖의 질문(Turbopack 등)은 기본값을 고릅니다.
-- 기본 예제는 지웁니다: `src/app/page.module.css`, `public/*.svg`, `page.js`의 예제 코드, `globals.css`의 기본 내용
-- 외부 라이브러리는 추가하지 않습니다. 상태 관리도 React 기본 기능(`useState`, `useEffect`, Context)만 씁니다.
-
----
-
-## 2단계: 그대로 가져올 것
-
-| vanilla | nextjs | 바꿀 점 |
-|---|---|---|
-| `style.css` | `src/app/globals.css` | **그대로 복사.** `layout.js`에서 import합니다. 클래스명이 같으므로 화면도 같습니다. |
-| `data.js` | `src/lib/data.js` | 각 상수 앞에 `export`만 붙입니다. 내용은 한 글자도 바꾸지 않습니다. |
-| `<html lang="ko">` | `layout.js`의 `<html lang="ko">` | |
-| `<title>`, description meta | `layout.js`의 `export const metadata` | 문구 그대로 |
-| Pretendard 폰트 `<link>` | `layout.js`의 `<head>` 안 `<link>` | 같은 CDN 주소(`pretendard@v1.3.9`) 그대로 |
-| 정적 마크업(제목, 설명, 버튼 문구 등) | 각 컴포넌트의 JSX | 문구·태그·`id`·`aria-*` 그대로 |
-
----
-
-## 3단계: 폴더·컴포넌트 구성
-
-vanilla `index.html`의 섹션 하나를 컴포넌트 하나로 옮깁니다.
-**상호작용이 없는 섹션은 서버 컴포넌트**, 상태·이벤트·브라우저 API를 쓰는 것만 `"use client"`로 만듭니다.
+## 시작 전 상태 (2026-10-28)
 
 ```
-nextjs/
-├─ package.json
-├─ next.config.mjs
-├─ PLAN.md
-└─ src/
-   ├─ app/
-   │  ├─ layout.js            ← html/head/body, metadata, 폰트, 테마 초기화 스크립트, Providers
-   │  ├─ page.js              ← 섹션 배치 (서버 컴포넌트)
-   │  └─ globals.css          ← vanilla style.css
-   ├─ lib/
-   │  ├─ data.js              ← vanilla data.js + export
-   │  ├─ format.js            ← won()
-   │  ├─ speak.js             ← speechSynthesis (클라이언트에서만 호출)
-   │  └─ storage.js           ← try/catch로 감싼 localStorage get/set + useStoredValue 훅
-   ├─ context/
-   │  ├─ ToastContext.js      ← "use client" · 토스트 표시 + useToast()
-   │  └─ PlanContext.js       ← "use client" · 선택된 플랜 (Pricing ↔ ApplyForm 공유)
-   └─ components/
-      ├─ Providers.js         ← "use client" · ToastProvider + PlanProvider
-      ├─ Reveal.js            ← "use client" · 스크롤 등장 효과 래퍼
-      ├─ SectionHead.js       ←  서버 · eyebrow / 제목 / 설명 묶음
-      ├─ Header.js            ← "use client" · 메뉴, 테마 버튼, 스크롤 그림자
-      ├─ Hero.js              ←  서버 · 문구 + 강의 통계(CURRICULUM으로 계산)
-      ├─ ChatCard.js          ← "use client" · EN → ZH → JA 순환 대화
-      ├─ WhySection.js        ←  서버 · PAINS 카드
-      ├─ PhrasePreview.js     ← "use client" · 분류·언어 탭, 듣기·복사
-      ├─ Curriculum.js        ←  서버 · <details> 아코디언 + 합계 문구
-      ├─ Steps.js             ←  서버 · 학습 방식 4단계
-      ├─ LevelQuiz.js         ← "use client" · 문제 진행, 결과, 다시 풀기
-      ├─ ForYou.js            ←  서버 · 추천 대상 + 강사진
-      ├─ Pricing.js           ← "use client" · 플랜 카드 (플랜 선택)
-      ├─ Faq.js               ←  서버 · <details>
-      ├─ ApplyForm.js         ← "use client" · 수강 신청서
-      └─ Footer.js            ←  서버
+바탕 화면/react/
+├─ vanilla/   ← 최초 HTML/CSS/JS 버전
+├─ reactjs/   ← 이식 원본 (origin = github.com/jhss9001-glitch/reactjs.git)
+└─ nextjs/    ← .git과 이 문서만 남김 (origin = github.com/jhss9001-glitch/nextjs.git)
 ```
 
-`page.js`의 섹션 순서는 vanilla와 같습니다.
+- 예전 Next.js 이식본(vanilla 기준, 커밋 `8da632d`)의 파일은 모두 지웠습니다. 필요하면 git 기록에서 되살릴 수 있습니다.
+- 개발 환경은 Node v24, npm 11입니다. 이전에 쓰던 Next.js는 16.4.3입니다.
 
-> Header → Hero → WhySection → PhrasePreview → Curriculum → Steps → LevelQuiz → ForYou → Pricing → Faq → ApplyForm → Footer
+### reactjs 구성
 
-- 서버 컴포넌트 안에 `<Reveal>`(클라이언트)을 넣고 그 children으로 서버 마크업을 넘기는 것은 문제없습니다.
-- `Providers`는 `layout.js`의 `<body>`에서 페이지 전체를 감싸고, 토스트 `<div className="toast" role="status">`도 여기서 렌더링합니다.
-
----
-
-## 4단계: vanilla 동작을 Next.js 방식으로 옮기기
-
-### 대응표
-
-| vanilla (`app.js`) | Next.js |
+| 구분 | 파일 |
 |---|---|
-| `innerHTML` + 템플릿 문자열 | JSX + `.map()`. 이스케이프는 React가 하므로 `esc()`는 필요 없음 |
-| `store.get/set` | `lib/storage.js`. **`useEffect`·이벤트 핸들러 안에서만** 호출 (서버에는 localStorage가 없음) |
-| `initTheme()` | ① `layout.js` `<head>`의 인라인 `<script>`가 페인트 전에 `kpt-theme`을 읽어 `data-theme` 설정 (깜빡임 방지) ② Header의 테마 버튼은 vanilla와 같은 로직으로 전환·저장. `<html>`에 `suppressHydrationWarning` |
-| `initMenu()` | Header의 `useState(open)` → `nav`에 `open` 클래스, 버튼 `aria-expanded`. 메뉴 링크 클릭 시 닫힘 |
-| `initHeaderShadow()` | Header의 `useEffect`에서 scroll 리스너(passive) 등록, 처음 1회 실행, 정리 |
-| `renderHeroStats()` | Hero(서버)에서 계산해 렌더링. `Math.round(minutes / 60)` 그대로 |
-| `initHeroChat()`의 `setInterval(5200)` | ChatCard의 `useEffect` + `clearInterval`. 말풍선 묶음에 `key={lang.code}`를 줘서 애니메이션 재실행. `animationDelay: i * 0.6s`. `prefers-reduced-motion`이면 순환하지 않음 |
-| `previewState` | PhrasePreview의 `useState("all")` + `useStoredValue("kpt-lang", "en")`(`useSyncExternalStore` 기반, 서버·하이드레이션 때는 `en`). 탭 클릭 시 저장 |
-| 듣기·복사 이벤트 위임 | 카드 버튼마다 `onClick`. 복사 문자열 `` `${외국어}\n(${ko})` ``와 성공·실패 토스트 문구 그대로 |
-| `speak()` | `lib/speak.js`. 미지원 시 토스트를 띄워야 하므로 `toast` 함수를 인자로 받음. `rate 0.9`, 목소리 선택 로직 그대로 |
-| `quiz` 객체 + `locked` | LevelQuiz의 `useState({ idx, score, picked })`. `picked`가 있으면 버튼 `disabled`, 정답 `correct` / 고른 오답 `wrong` |
-| 다음 문제 `setTimeout(1300)` | `picked`가 생기면 `useEffect`에서 1.3초 뒤 다음 문제로, 정리 함수에서 `clearTimeout` |
-| 퀴즈 결과 선택 | `[...QUIZ_RESULTS].reverse().find(r => score >= r.min)` 그대로 |
-| 플랜 버튼 → `#applyPlan` 값 변경 | `PlanContext`. Pricing 버튼 `onClick`에서 `setPlan(p.id)`, 링크는 `href="#apply"` 그대로. ApplyForm의 `<select>`가 같은 값을 사용. 기본값은 `featured` 플랜 |
-| 신청서 `FormData` 검사 | 제어 컴포넌트(입력값을 상태로). **검사 순서·정규식·오류 문구 그대로**: 이름 → 이메일 → 관심 언어 → 동의. 성공 시 폼 초기화 + 플랜을 featured로 되돌림 + 접수 토스트 |
-| `toast()` (2.6초) | `ToastContext`의 `useToast()`. 연속 호출 시 이전 타이머를 지우고 다시 2.6초 |
-| `initReveal()` (threshold 0.12) | `<Reveal as="article" className="card pain">`처럼 감싸면 자기 요소를 관찰하고 보이면 `in` 클래스를 DOM에 직접 추가(vanilla와 동일) 후 관찰 해제. IntersectionObserver 미지원이면 바로 `in` |
-| `<details>` (커리큘럼, FAQ) | 그대로 사용. 커리큘럼 첫 챕터만 `open`. 커리큘럼은 `<Reveal as="details" open={i === 0}>` |
-
-### Next.js로 옮길 때 주의할 점
-
-- **하이드레이션 불일치 방지**: `window`, `localStorage`, `matchMedia`, `speechSynthesis`, `navigator.clipboard`는 렌더링 중에 읽지 않고 `useEffect`나 핸들러 안에서만 씁니다. 서버와 첫 클라이언트 렌더 결과가 같아야 합니다.
-  - 그래서 언어 탭은 처음에 `en`으로 그려진 뒤 저장된 언어로 바뀝니다. 다른 언어를 저장해 둔 경우 아주 짧게 바뀌는 것이 보일 수 있습니다.
-- 같은 페이지 안 이동(`#why`, `#apply` 등)은 `next/link`가 아니라 **일반 `<a href="#...">`** 를 씁니다.
-- `globals.css`의 `html { scroll-behavior: smooth }`가 그대로 동작하도록 `<html>`에 `data-scroll-behavior="smooth"`를 붙입니다.
-- `className`, `htmlFor`, 객체 `style`(`style={{ width: "50%" }}`), boolean `aria-selected` / `aria-expanded`를 씁니다.
-- 개발 모드에서는 StrictMode로 effect가 두 번 실행되므로 **타이머·리스너·observer는 반드시 정리**합니다.
-- 폼은 서버로 보내지 않습니다(vanilla와 동일). Server Action이나 API Route는 만들지 않습니다.
-- 퀴즈 진행 막대 너비처럼 계산되는 값은 인라인 style로 둡니다(vanilla와 동일).
+| 진입점 | `main.jsx`(ToastProvider로 감싸기), `App.jsx`(해시 라우팅, 페이지 구성, 선택 플랜 상태, 탭 제목) |
+| 섹션 | `Hero` `ChatCard` `ForYou` `WhySection` `PhrasePreview` `Curriculum` `Steps` `LevelQuiz` `Team` `Portrait` `Pricing` `Faq` `ApplyForm` |
+| 공통 | `Header` `Footer` `Reveal` `SectionHead` |
+| 훅·유틸 | `useRoute` `useInView` `useLocalStorage` `useTheme` / `ToastContext` / `speak` `format` |
+| 데이터·스타일 | `data.js`(NAV, 문구, 플랜, 강사 등 모든 콘텐츠), `styles.css` |
+| 라이브러리 | `lucide-react`(아이콘), `embla-carousel-react` + `embla-carousel-autoplay`(강사 슬라이드) |
 
 ---
 
-## 5단계: 확인
+## 핵심 결정
 
-1. `npm run dev`로 띄우고 vanilla `index.html`과 **나란히 놓고 비교**합니다.
-2. 기능 체크리스트
-   - [ ] 모든 문구·데이터가 vanilla와 같음 (섹션별로 눈으로 대조)
-   - [ ] 다크 모드 전환, 새로고침 후 유지, 새로고침 시 흰 화면 깜빡임 없음
-   - [ ] 모바일 메뉴 열고 닫기, 메뉴 클릭 시 닫힘
-   - [ ] 스크롤 시 헤더 그림자
-   - [ ] 히어로 대화가 EN → ZH → JA로 순환, 말풍선 애니메이션
-   - [ ] 표현 분류 필터, 언어 탭, 새로고침 후 언어 유지
-   - [ ] 표현 듣기(음성), 복사 + 토스트
-   - [ ] 히어로 통계와 커리큘럼 합계(5개 챕터 · 20강 · 시간/분)가 vanilla와 같음
-   - [ ] 퀴즈 정답·오답 표시, 결과 화면, 다시 풀기
-   - [ ] 플랜 버튼을 누르면 신청서 플랜이 미리 선택됨
-   - [ ] 신청서 오류 4가지, 접수 토스트, 접수 후 폼·플랜 초기화
-   - [ ] 스크롤하면 섹션이 나타나는 효과
-   - [ ] 반응형: 1000px / 860px / 560px 화면 폭
-   - [ ] 브라우저 콘솔에 hydration 경고 없음
-3. `npm run build`가 오류 없이 끝나고, 페이지가 정적(○ Static)으로 생성되는지 확인합니다.
-4. `npm run lint` 통과
+### 1. 해시 라우팅을 실제 경로로 바꾸기
+
+`useRoute.js`와 `App.jsx`의 `pages` 객체를 없애고, App Router 폴더 구조로 옮깁니다.
+
+| reactjs 주소 | Next.js 경로 | 파일 | 내용 |
+|---|---|---|---|
+| `#/` | `/` | `app/page.jsx` | Hero → ForYou → WhySection → PhrasePreview |
+| `#/why`, `#/preview` | `/#why`, `/#preview` | (홈 안의 섹션) | 해당 섹션으로 스크롤 |
+| `#/curriculum` | `/curriculum` | `app/curriculum/page.jsx` | Curriculum + Steps |
+| `#/quiz` | `/quiz` | `app/quiz/page.jsx` | LevelQuiz |
+| `#/team` | `/team` | `app/team/page.jsx` | Team |
+| `#/pricing` | `/pricing` | `app/pricing/page.jsx` | Pricing |
+| `#/faq` | `/faq` | `app/faq/page.jsx` | Faq |
+| `#/apply` | `/apply` | `app/apply/page.jsx` | ApplyForm |
+| 없는 주소 | 404 | `app/not-found.jsx` | 안내 문구와 홈으로 가는 링크 |
+
+- 모든 내부 링크는 `next/link`의 `<Link>`로 바꿉니다. 대상은 Header 메뉴, 로고, 수강 신청 버튼, Hero 버튼 2개, LevelQuiz의 "커리큘럼 보기", Pricing 버튼입니다.
+- reactjs에서는 없는 주소가 홈으로 갔지만, Next.js에서는 404 페이지를 보여줍니다. 이것은 의도한 차이입니다.
+- 페이지가 바뀔 때 맨 위로 이동하는 것은 Next.js가 기본으로 처리합니다. 그래서 `useRoute`의 `scrollTo`는 옮기지 않습니다.
+- reactjs의 `<main key={pageKey}>`는 페이지가 바뀔 때 등장 애니메이션을 다시 실행하려는 용도였습니다. App Router도 페이지가 바뀌면 컴포넌트를 새로 그리므로 key가 필요 없습니다.
+
+### 2. 선택한 플랜은 주소의 쿼리로 넘기기
+
+- **reactjs:** `App`의 `selectedPlan` 상태를 Pricing과 ApplyForm에 props로 내려 줍니다.
+- **Next.js:** 두 페이지가 서로 다른 경로라 상태를 공유하지 않습니다. 대신 Pricing 버튼을 `/apply?plan=pro` 형태의 링크로 만듭니다.
+- **ApplyForm:**
+  - `useSearchParams()`로 `plan`을 읽고, `PLANS`에 없는 값이면 기본 플랜(`featured`)을 씁니다.
+  - 제출에 성공하면 지금처럼 폼을 비우고 기본 플랜으로 되돌립니다.
+  - `useSearchParams`를 쓰는 컴포넌트는 `app/apply/page.jsx`에서 **`<Suspense>`로 감쌉니다.** 감싸지 않으면 프로덕션 빌드가 실패합니다(Next 문서의 "Missing Suspense boundary with useSearchParams"). 감싸 두면 페이지의 나머지는 정적으로 미리 만들어집니다.
+- 이렇게 하면 `onSelectPlan`, `onPlanChange` props와 App의 상태가 필요 없어집니다.
+
+### 3. 서버 컴포넌트와 클라이언트 컴포넌트 나누기
+
+App Router의 컴포넌트는 기본이 서버 컴포넌트입니다. 상태, 이벤트, 브라우저 API를 쓰는 파일만 맨 위에 `"use client"`를 붙입니다.
+
+| `"use client"` 필요 | 서버 컴포넌트로 둬도 됨 |
+|---|---|
+| `Header`(메뉴 열기, 스크롤, 테마, 현재 메뉴 표시) | `Hero`(안의 ChatCard만 클라이언트) |
+| `ChatCard`(타이머) | `ForYou` `WhySection` `Curriculum` `Steps` `Faq` `Footer` `SectionHead` |
+| `PhrasePreview`(필터, 음성, 복사, 토스트) | `Portrait`(SVG만 그림, `useId`는 서버에서도 동작) |
+| `LevelQuiz` `Team`(Embla) `Pricing`(*) `ApplyForm` | |
+| `Reveal`(IntersectionObserver) | |
+| `ToastContext` → `Providers.jsx`로 감싸 layout에서 사용 | |
+
+(*) Pricing은 링크만 남으므로 서버 컴포넌트로 둬도 됩니다. 다만 그 안에서 쓰는 `Reveal`은 클라이언트 컴포넌트입니다.
+
+- 서버 컴포넌트가 클라이언트 컴포넌트에 **함수를 props로 넘길 수는 없습니다.** `data.js`의 lucide 아이콘(PAINS의 `icon`)은 서버 컴포넌트인 WhySection에서만 그리므로 문제없습니다.
+
+### 4. 서버 렌더링 때 깨지는 브라우저 코드 고치기
+
+Next.js는 페이지를 서버에서 먼저 그리므로, 렌더링 중에 `window`, `localStorage`, `matchMedia`를 바로 쓰면 오류가 나거나 화면이 어긋납니다(hydration 오류). 고칠 곳은 다음과 같습니다.
+
+| 위치 | 지금 코드 | 바꿀 방법 |
+|---|---|---|
+| `useInView` | `useState(() => !("IntersectionObserver" in window))` | 초기값을 `false`로 두고, 지원 여부는 `useEffect` 안에서 확인합니다. |
+| `useLocalStorage` | 초기값에서 `localStorage`를 바로 읽음 | 초기값은 `initial`로 두고, 저장된 값은 `useEffect`에서 읽어 반영합니다. |
+| `Team` | 렌더링 중 `plugins()`에서 `matchMedia`를 호출함 | Autoplay 플러그인은 항상 넣습니다. 마운트 후 모션 줄이기 설정이면 `emblaApi.plugins().autoplay.stop()`을 호출합니다. |
+| `ChatCard` | `useEffect` 안에서만 `matchMedia` 사용 | 그대로 둡니다. |
+| `speak`, 클립보드 복사 | 클릭할 때만 실행 | 그대로 둡니다. |
+
+### 5. 다크 모드가 깜빡이지 않게 하기
+
+- **지금 문제:** reactjs는 저장된 테마를 `useEffect`에서 적용합니다. 서버에서 그린 HTML에서는 이 방식이면 첫 화면이 잠깐 라이트 모드로 보였다가 바뀝니다.
+- **해결:** `app/layout.jsx`의 `<head>`에 짧은 인라인 스크립트를 넣습니다. 이 스크립트가 `localStorage`의 `kpt-theme`를 읽어 `document.documentElement.dataset.theme`를 화면이 그려지기 전에 설정합니다.
+- 서버 HTML과 속성이 달라지므로 `<html lang="ko" suppressHydrationWarning>`로 둡니다.
+- `useTheme`의 토글 로직과 저장 키(`kpt-theme`)는 그대로 씁니다.
+
+### 6. 페이지 제목, 설명, 폰트
+
+- **제목·설명:** `App.jsx`의 `document.title` 코드 대신 Next의 `metadata`를 씁니다.
+  - `layout.jsx`의 title은 `{ default: "K-Pharm Talk · 약사를 위한 영어 복약지도 강의", template: "%s · K-Pharm Talk" }`입니다. description은 지금 `index.html`의 문구를 그대로 씁니다.
+  - 각 `page.jsx`는 `export const metadata = { title: "커리큘럼" }`처럼 NAV의 라벨을 제목으로 씁니다. 수강 신청 페이지의 제목은 "수강 신청"입니다.
+- **폰트:** Pretendard는 지금처럼 CDN `<link>`를 layout의 `<head>`에 넣습니다. 폰트 로딩 방식은 바꾸지 않습니다.
+
+### 7. CSS 옮기기
+
+- `styles.css`를 `app/globals.css`로 **그대로 복사**하고 `layout.jsx`에서 import합니다.
+- 고칠 곳은 한 군데입니다. Next에는 `#root` 요소가 없으므로, `#root { min-height: 100vh; display: flex; flex-direction: column; }`를 `body`에 적용합니다. 이 규칙은 푸터를 화면 아래에 붙이는 용도입니다.
+- `body::before`의 고정 배경 그라데이션, `.page { flex: 1 }`, 그 밖의 클래스는 그대로 둡니다.
+
+### 8. Next 기본 설정
+
+- **`cacheComponents: true`:** create-next-app 기본값이므로 유지합니다. 이 사이트는 데이터 요청이 없고 모든 내용이 `data.js`에 고정되어 있어서, `/apply`의 Suspense 말고는 따로 할 일이 없습니다.
+- **Next 문서 먼저 확인:** 생성된 `AGENTS.md`의 안내대로, 코드를 쓰기 전에 `node_modules/next/dist/docs/`에서 다음 문서를 확인합니다. Next 16은 예전 버전과 API가 다를 수 있습니다.
+  - `layouts-and-pages`
+  - `linking-and-navigating`
+  - `server-and-client-components`
+  - `use-search-params`
+  - `metadata`
 
 ---
 
-## 6단계: 커밋과 push
+## 파일 대응표
 
-1. `.gitignore`에 `node_modules`, `.next`가 들어 있는지 확인합니다(create-next-app 기본 포함).
-2. `nextjs/` 폴더에서 커밋합니다. 예: `K-Pharm Talk Next.js 버전`
-3. 원격 저장소를 연결하고 push합니다.
+| reactjs | nextjs | 비고 |
+|---|---|---|
+| `index.html` | `src/app/layout.jsx` | `<html lang="ko">`, 메타데이터, 폰트 링크, 테마 스크립트 |
+| `src/main.jsx` | `src/app/layout.jsx` + `src/components/Providers.jsx` | ToastProvider를 Providers로 감쌉니다. |
+| `src/App.jsx` | `src/app/**/page.jsx` | 페이지 구성만 옮기고, 라우팅·상태·제목 코드는 삭제합니다. |
+| `src/styles.css` | `src/app/globals.css` | `#root` 규칙만 `body`로 바꿉니다. |
+| `src/data.js` | `src/lib/data.js` | 그대로 |
+| `src/utils/speak.js` `format.js` | `src/lib/speak.js` `format.js` | 그대로 |
+| `src/hooks/useInView.js` `useLocalStorage.js` | `src/hooks/` | 4번 항목대로 고칩니다. |
+| `src/hooks/useTheme.js` | `src/hooks/useTheme.js` | 그대로 |
+| `src/hooks/useRoute.js` | (삭제) | `usePathname`과 App Router가 대신합니다. |
+| `src/context/ToastContext.jsx` | `src/context/ToastContext.jsx` | 맨 위에 `"use client"`를 붙입니다. |
+| `src/components/*.jsx` | `src/components/*.jsx` | 확장자 `.jsx`를 유지해 reactjs와 비교하기 쉽게 합니다. |
+
+### 컴포넌트별 바뀌는 점
+
+| 컴포넌트 | 바뀌는 점 |
+|---|---|
+| `Header` | `route` prop 대신 `usePathname()`으로 현재 메뉴를 찾아 `aria-current="page"`를 붙입니다. 링크는 `<Link href="/curriculum">` 형태로 바꿉니다. 모바일 메뉴는 링크를 누르면 닫히는 지금 방식을 유지합니다. |
+| `Hero` | "얼리버드로 시작하기"는 `/apply`, "무료 표현 들어보기"는 `/#preview`로 연결합니다. |
+| `LevelQuiz` | "커리큘럼 보기"를 `<Link href="/curriculum">`로 바꿉니다. |
+| `Pricing` | `onSelectPlan` prop을 없애고 버튼을 `<Link href={`/apply?plan=${p.id}`}>`로 바꿉니다. |
+| `ApplyForm` | `plan`, `onPlanChange` props를 없앱니다. 플랜은 내부 상태로 두고 초기값은 쿼리에서 읽습니다(2번 항목). |
+| `Team` | Autoplay에서 모션 줄이기를 처리하는 방식만 바꿉니다(4번 항목). |
+| 나머지 | import 경로(`../data.js` → `@/lib/data.js`)와 `"use client"` 추가만 합니다. |
+
+---
+
+## 구현 단계
+
+### 1단계: 프로젝트 생성
+
+1. create-next-app은 폴더에 `PLAN.md`가 있으면 충돌로 멈춥니다. 그래서 이 문서를 잠시 `react/` 폴더로 옮깁니다. `.git`은 그대로 둬도 됩니다.
+2. `react/` 폴더에서 아래 명령을 실행합니다. 그 밖의 질문은 기본값으로 답합니다.
    ```powershell
-   git branch -M main
-   git remote add origin https://github.com/jhss9001-glitch/nextjs.git
-   git push -u origin main
+   npx create-next-app@latest nextjs --js --app --src-dir --eslint --no-tailwind --import-alias "@/*" --use-npm
    ```
+3. `PLAN.md`를 다시 `nextjs/`로 옮깁니다.
+4. reactjs와 같은 라이브러리를 설치합니다.
+   ```powershell
+   npm install lucide-react embla-carousel-react embla-carousel-autoplay
+   ```
+5. 예제 파일을 지웁니다: `page.module.css`, `public/*.svg`, 예제 `page.js`와 `globals.css`의 내용, `favicon.ico`(쓰지 않는 경우).
+6. 앞의 8번 항목에 적은 Next 문서를 읽습니다.
+
+### 2단계: 공통 기반
+
+1. `globals.css`, `lib/data.js`, `lib/speak.js`, `lib/format.js`를 복사합니다.
+2. 훅 3개와 `ToastContext`를 옮기고, 4번 항목대로 고칩니다.
+3. `layout.jsx`를 만듭니다. 들어갈 것은 메타데이터, 폰트 링크, 테마 스크립트, `<Providers>`, `<Header />`, `<main className="page">{children}</main>`, `<Footer />`입니다.
+
+### 3단계: 컴포넌트
+
+1. 대응표 순서대로 컴포넌트를 복사하고, 필요한 파일에 `"use client"`를 붙입니다.
+2. 링크를 `<Link>`로 바꾸고 props를 정리합니다(컴포넌트별 바뀌는 점 표).
+
+### 4단계: 페이지
+
+1. 홈, 6개 페이지, `not-found.jsx`를 만듭니다.
+2. 페이지마다 `metadata`를 넣습니다.
+3. `/apply`는 Suspense로 감쌉니다.
+
+### 5단계: 검증
+
+1. `npm run lint`와 `npm run build`가 통과해야 합니다. 빌드 결과에서 모든 경로가 정적(○) 또는 부분 사전 렌더링으로 표시되는지 봅니다.
+2. `npm run dev`로 띄워 아래 목록을 reactjs와 나란히 비교합니다. 데스크톱과 모바일 폭(390px) 둘 다 봅니다.
+
+| 영역 | 확인할 것 |
+|---|---|
+| 공통 | 배경이 경계 없이 하나로 이어지는지, 다크 모드 전환과 새로고침 후 유지(깜빡임 없음), 모바일 메뉴 열기·닫기, 현재 메뉴 강조, 페이지별 탭 제목 |
+| 홈 | 상담 카드 3종 순환, "무료 표현 들어보기"를 누르면 표현 미리듣기로 스크롤, 스크롤 등장 애니메이션 |
+| 표현 미리듣기 | 분류 필터, 듣기(영어 음성), 복사와 토스트 |
+| 커리큘럼 | 합계 문구(5개 챕터 · 20강), 아코디언 |
+| 레벨 테스트 | 4문제 진행, 정답·오답 표시, 결과, 다시 풀기, "커리큘럼 보기" 이동 |
+| 강사진 | 무한 루프, 4.5초 자동 넘김, 마우스를 올리면 멈춤, 화살표, 점 표시, 스와이프, 일러스트 3종(박지희 약사 가운) |
+| 수강료 | 할인율(베이직 20%, 올인원 29%), 플랜 버튼을 누르면 `/apply`에서 해당 플랜이 미리 선택됨 |
+| 수강 신청 | 입력 검사 문구, 접수 토스트, 폼 초기화 |
+| 접근성 | 기기의 "동작 줄이기"를 켜면 자동 넘김과 애니메이션이 멈춤 |
+
+### 6단계: 커밋과 배포
+
+1. `nextjs` 저장소에 커밋하고 push합니다.
+2. Vercel에서 `nextjs` 저장소로 새 프로젝트를 만듭니다. Framework는 Next.js로 자동 인식되고 추가 설정은 없습니다.
+3. 배포 주소에서 5단계 목록을 한 번 더 확인합니다.
 
 ---
 
-## 7단계: 배포 (Vercel)
+## 하지 않는 것
 
-1. Vercel에서 **Add New → Project**로 `nextjs` 저장소를 가져옵니다.
-2. Framework Preset이 **Next.js**로 자동 선택되는지 확인합니다. Root Directory·Build 설정은 기본값 그대로 둡니다.
-3. Deploy 후 배포 주소에서 5단계 체크리스트를 다시 확인합니다.
-4. 이후 `main`에 push할 때마다 자동으로 다시 배포됩니다.
+- 문구, 가격, 강사 정보, 디자인은 바꾸지 않습니다. 콘텐츠 수정은 이식이 끝난 뒤 따로 합니다.
+- TypeScript, Tailwind, 상태 관리 라이브러리는 추가하지 않습니다.
+- 신청서를 실제로 저장하는 기능(서버 액션, DB)은 만들지 않습니다. 지금처럼 토스트만 띄웁니다.
+- 예전 해시 주소(`#/team` 등)를 새 주소로 넘겨 주는 코드는 넣지 않습니다. reactjs 배포 주소는 따로 남아 있으므로 필요 없습니다.

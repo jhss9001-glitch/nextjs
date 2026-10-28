@@ -1,9 +1,6 @@
-// 브라우저 음성 읽기. 미지원 환경에서는 toast로 안내합니다.
-export function speak(text, lang, toast) {
-  if (!("speechSynthesis" in window)) {
-    toast("이 브라우저는 음성 읽기를 지원하지 않습니다.");
-    return;
-  }
+/* 브라우저 음성으로 읽기. 지원하지 않으면 false를 돌려줍니다. */
+export function speak(text, lang) {
+  if (!("speechSynthesis" in window)) return false;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = lang;
@@ -11,4 +8,5 @@ export function speak(text, lang, toast) {
   const voice = speechSynthesis.getVoices().find((v) => v.lang.replace("_", "-").startsWith(lang.slice(0, 2)));
   if (voice) u.voice = voice;
   speechSynthesis.speak(u);
+  return true;
 }

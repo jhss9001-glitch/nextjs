@@ -21,7 +21,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div id="toast" className={`toast${show ? " show" : ""}`} role="status">{msg}</div>
+      <div className={`toast${show ? " show" : ""}`} role="status">{msg}</div>
     </ToastContext.Provider>
   );
 }

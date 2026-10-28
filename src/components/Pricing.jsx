@@ -1,21 +1,15 @@
-"use client";
-
-import Reveal from "./Reveal";
-import SectionHead from "./SectionHead";
-import { PLANS } from "@/lib/data";
-import { won } from "@/lib/format";
-import { usePlan } from "@/context/PlanContext";
+import Link from "next/link";
+import { PLANS } from "@/lib/data.js";
+import { won } from "@/lib/format.js";
+import Reveal from "./Reveal.jsx";
+import SectionHead from "./SectionHead.jsx";
 
 export default function Pricing() {
-  const { setPlan } = usePlan();
-
   return (
     <section className="section" id="pricing">
       <div className="container">
-        <SectionHead eyebrow="Pricing" title="수강료">
-          <p className="section-desc">모든 플랜은 수강 기간 내 무제한 반복 수강이 가능합니다.</p>
-        </SectionHead>
-        <div className="pricing-grid" id="pricingGrid">
+        <SectionHead eyebrow="Pricing" title="수강료" desc="모든 플랜은 수강 기간 내 무제한 반복 수강이 가능합니다." />
+        <div className="pricing-grid">
           {PLANS.map((p) => {
             const off = p.price ? Math.round((1 - p.early / p.price) * 100) : 0;
             return (
@@ -27,15 +21,13 @@ export default function Pricing() {
                   ? <p className="price"><del>{won(p.price)}</del><b>{won(p.early)}</b><span className="off">{off}% 얼리버드</span></p>
                   : <p className="price"><b>별도 문의</b></p>}
                 <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
-                {/* 누르면 신청서의 플랜을 미리 선택 */}
-                <a
-                  href="#apply"
+                {/* 신청서에서 이 플랜이 미리 선택되도록 주소에 담아 넘김 */}
+                <Link
+                  href={`/apply?plan=${p.id}`}
                   className={`btn ${p.featured ? "btn-primary" : "btn-ghost"} btn-block`}
-                  data-plan={p.id}
-                  onClick={() => setPlan(p.id)}
                 >
                   {p.price ? "이 플랜으로 신청" : "단체 문의하기"}
-                </a>
+                </Link>
               </Reveal>
             );
           })}

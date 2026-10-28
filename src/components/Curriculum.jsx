@@ -1,21 +1,19 @@
-import Reveal from "./Reveal";
-import SectionHead from "./SectionHead";
-import { CURRICULUM } from "@/lib/data";
+import { CURRICULUM } from "@/lib/data.js";
+import Reveal from "./Reveal.jsx";
+import SectionHead from "./SectionHead.jsx";
 
 const sumMin = (m) => m.lessons.reduce((s, l) => s + l.min, 0);
 const total = CURRICULUM.reduce((n, m) => n + m.lessons.length, 0);
 const totalMin = CURRICULUM.reduce((n, m) => n + sumMin(m), 0);
+const SUMMARY =
+  `총 ${CURRICULUM.length}개 챕터 · ${total}강 · 약 ${Math.floor(totalMin / 60)}시간 ${totalMin % 60}분. 모든 레슨은 원어민 영어 음성과 스크립트로 제공됩니다.`;
 
 export default function Curriculum() {
   return (
     <section className="section" id="curriculum">
       <div className="container">
-        <SectionHead eyebrow="Curriculum" title="약국 현장에서 거꾸로 설계한 커리큘럼">
-          <p className="section-desc" id="curriculumSummary">
-            {`총 ${CURRICULUM.length}개 챕터 · ${total}강 · 약 ${Math.floor(totalMin / 60)}시간 ${totalMin % 60}분. 모든 레슨은 영어·중국어·일본어 버전으로 제공됩니다.`}
-          </p>
-        </SectionHead>
-        <div className="curriculum" id="curriculumList">
+        <SectionHead eyebrow="Curriculum" title="약국 현장에서 거꾸로 설계한 커리큘럼" desc={SUMMARY} />
+        <div className="curriculum">
           {CURRICULUM.map((m, i) => (
             <Reveal as="details" className="module" open={i === 0} key={m.title}>
               <summary>

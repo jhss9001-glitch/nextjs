@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HERO_CHATS, LANGS } from "@/lib/data";
+import { HERO_CHATS } from "@/lib/data.js";
 
-// EN → ZH → JA 순서로 상담 대화를 바꿔 보여줍니다.
 export default function ChatCard() {
   const [idx, setIdx] = useState(0);
-  const lang = LANGS[idx % LANGS.length];
+  const chat = HERO_CHATS[idx % HERO_CHATS.length];
 
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -18,19 +17,18 @@ export default function ChatCard() {
     <div className="chat-card">
       <div className="chat-head">
         <span className="dot"></span>
-        <span>상담 중 · <b id="chatLang">{lang.label}</b></span>
+        <span>상담 중 · <b>{chat.topic}</b></span>
       </div>
-      <div className="chat-body" id="chatBody" aria-live="polite" key={lang.code}>
-        {HERO_CHATS[lang.code].map((m, i) => (
-          <div key={i} className={`bubble ${m.who}`} lang={lang.code} style={{ animationDelay: `${i * 0.6}s` }}>
+      <div className="chat-body" aria-live="polite">
+        {/* key에 대화 번호를 넣어 대화가 바뀔 때마다 말풍선 애니메이션을 다시 실행 */}
+        {chat.messages.map((m, i) => (
+          <div key={`${idx}-${i}`} className={`bubble ${m.who}`} lang="en" style={{ animationDelay: `${i * 0.6}s` }}>
             <span className="who">{m.who === "rx" ? "약사" : "Guest"}</span>{m.text}
           </div>
         ))}
       </div>
       <div className="chat-foot">
-        <span className="chip">#레티놀</span>
-        <span className="chip">#자외선차단</span>
-        <span className="chip">#사용시간</span>
+        {chat.tags.map((t) => <span className="chip" key={t}>#{t}</span>)}
       </div>
     </div>
   );
